@@ -155,6 +155,12 @@
       <button class="ab" onclick="selectAlgo('heap',this)"><span>Heap Sort</span><span class="badge bm">중</span></button>
     </div>
     <div class="sb-sec">
+      <div class="sb-title">// 특수 — 비교 없는 선형</div>
+      <button class="ab" onclick="selectAlgo('counting',this)"><span>Counting Sort</span><span class="badge bm">중</span></button>
+      <button class="ab" onclick="selectAlgo('radix',this)"><span>Radix Sort</span><span class="badge bm">중</span></button>
+      <button class="ab" onclick="selectAlgo('bucket',this)"><span>Bucket Sort</span><span class="badge bm">중</span></button>
+    </div>
+    <div class="sb-sec">
       <div class="sb-title">// 고급 — 실무 표준</div>
       <button class="ab" onclick="selectAlgo('tim',this)"><span>Timsort</span><span class="badge bh">상</span></button>
       <button class="ab" onclick="selectAlgo('library',this)"><span>Library Sort</span><span class="badge bh">상</span></button>
@@ -267,7 +273,8 @@
 // 알고리즘 실행 시 모든 프레임을 steps[] 배열에 미리 기록,
 // setInterval로 재생 → async generator 없이 완벽한 애니메이션
 // =============================================================
-let ARR = [];
+let ARR = [];          // 현재 작업 배열
+let ORIGIN_ARR = [];   // 알고리즘 변경 시 복원용 원본 배열 (크기·값 고정)
 let STEPS = [];
 let SIDX = 0;
 let TIMER = null;
@@ -516,6 +523,142 @@ function recANN(a) {
   a.sort((x,y)=>x-y);
   const allD=new Set(Array.from({length:n},(_,i)=>i));
   S.push({a:[...a],dn:allD,c,w,msg:'✓ ANN 근사 탐색 완료 — Recall@10 ≈ 95%',fin:true});
+  return S;
+}
+
+// ── COUNTING SORT recorder ────────────────────────────────────
+function recCounting(a) {
+  const S=[], n=a.length, done=new Set();
+  let c=0, w=0;
+  const maxV = Math.max(...a);
+  const minV = Math.min(...a);
+  const range = maxV - minV + 1;
+
+  // Phase 1: 카운트 배열 구성
+  const cnt = new Array(range).fill(0);
+  for (let i=0; i<n; i++) {
+    cnt[a[i]-minV]++;
+    c++;
+    S.push({a:[...a], hi:[i], dn:new Set(done), c, w,
+      msg:`카운트: arr[${i}]=${a[i]} → count[${a[i]-minV}]=${cnt[a[i]-minV]}`});
+  }
+  S.push({a:[...a], dn:new Set(done), c, w,
+    msg:`카운트 배열 완성 (범위 ${minV}~${maxV}, size=${range})`});
+
+  // Phase 2: 누적합
+  for (let i=1; i<range; i++) cnt[i] += cnt[i-1];
+  S.push({a:[...a], dn:new Set(done), c, w,
+    msg:'누적합(Prefix Sum) 계산 완료 → 각 값의 최종 위치 결정'});
+
+  // Phase 3: 출력 배열 구성 (뒤에서 앞으로 → 안정 정렬 보장)
+  const out = new Array(n);
+  for (let i=n-1; i>=0; i--) {
+    const pos = --cnt[a[i]-minV];
+    out[pos] = a[i]; w++;
+    S.push({a:[...out.map((v,idx)=>v===undefined?a[idx]:v)],
+      bl:[pos], dn:new Set(done), c, w,
+      msg:`배치: arr[${i}]=${a[i]} → 출력[${pos}]`});
+  }
+
+  for (let i=0; i<n; i++) a[i]=out[i];
+  const allD=new Set(Array.from({length:n},(_,i)=>i));
+  S.push({a:[...a], dn:allD, c, w, msg:'✓ 정렬 완료! — 비교 없이 O(n+k) 달성', fin:true});
+  return S;
+}
+
+// ── RADIX SORT recorder ──────────────────────────────────────
+function recRadix(a) {
+  const S=[], n=a.length, done=new Set();
+  let c=0, w=0;
+  const maxV = Math.max(...a);
+  let exp = 1;
+  let pass = 0;
+
+  while (Math.floor(maxV / exp) > 0) {
+    pass++;
+    const digit = d => Math.floor(d/exp) % 10;
+    S.push({a:[...a], dn:new Set(done), c, w,
+      msg:`Pass ${pass}: 자릿수=${exp} (${exp===1?'1의 자리':exp===10?'10의 자리':exp+'의 자리'}) 기준 정렬 시작`});
+
+    // Count
+    const cnt = new Array(10).fill(0);
+    for (let i=0; i<n; i++) {
+      const d = digit(a[i]);
+      cnt[d]++; c++;
+      S.push({a:[...a], hi:[i], dn:new Set(done), c, w,
+        msg:`카운트: arr[${i}]=${a[i]} → 자릿수=${d}, count[${d}]=${cnt[d]}`});
+    }
+
+    // 누적합
+    for (let i=1; i<10; i++) cnt[i]+=cnt[i-1];
+
+    // 출력
+    const out = new Array(n);
+    for (let i=n-1; i>=0; i--) {
+      const d = digit(a[i]);
+      const pos = --cnt[d];
+      out[pos] = a[i]; w++;
+      S.push({a:[...out.map((v,idx)=>v===undefined?a[idx]:v)],
+        bl:[pos], dn:new Set(done), c, w,
+        msg:`배치: arr[${i}]=${a[i]} (자릿수=${d}) → 위치 ${pos}`});
+    }
+    for (let i=0;i<n;i++) a[i]=out[i];
+    S.push({a:[...a], dn:new Set(done), c, w,
+      msg:`Pass ${pass} 완료 — 자릿수 ${exp} 기준 정렬됨`});
+
+    exp *= 10;
+  }
+
+  const allD=new Set(Array.from({length:n},(_,i)=>i));
+  S.push({a:[...a], dn:allD, c, w, msg:`✓ 정렬 완료! — ${pass}회 패스, O(d·n) 달성`, fin:true});
+  return S;
+}
+
+// ── BUCKET SORT recorder ─────────────────────────────────────
+function recBucket(a) {
+  const S=[], n=a.length, done=new Set();
+  let c=0, w=0;
+  const maxV = Math.max(...a);
+  const minV = Math.min(...a);
+  const bucketCount = Math.max(1, Math.floor(Math.sqrt(n)));
+  const range = maxV - minV + 1;
+
+  // Phase 1: 버킷 배분
+  const buckets = Array.from({length:bucketCount}, ()=>[]);
+  for (let i=0; i<n; i++) {
+    const bi = Math.min(bucketCount-1, Math.floor((a[i]-minV)/range * bucketCount));
+    buckets[bi].push(a[i]); c++;
+    S.push({a:[...a], hi:[i], dn:new Set(done), c, w,
+      msg:`버킷 배분: arr[${i}]=${a[i]} → 버킷[${bi}] (총 ${bucketCount}개 버킷)`});
+  }
+  S.push({a:[...a], dn:new Set(done), c, w,
+    msg:`버킷 ${bucketCount}개 배분 완료 — 각 버킷 내부 정렬 시작`});
+
+  // Phase 2: 각 버킷 내부 Insertion Sort
+  let pos = 0;
+  for (let bi=0; bi<bucketCount; bi++) {
+    const bk = buckets[bi];
+    // 삽입 정렬
+    for (let i=1; i<bk.length; i++) {
+      let key=bk[i], j=i-1;
+      while(j>=0 && bk[j]>key){ bk[j+1]=bk[j]; j--; w++; }
+      bk[j+1]=key; c++;
+    }
+    // 결과 병합
+    for (let i=0; i<bk.length; i++) {
+      a[pos]=bk[i]; w++;
+      done.add(pos);
+      S.push({a:[...a], bl:[pos], dn:new Set(done), c, w,
+        msg:`버킷[${bi}] 병합: ${bk[i]} → arr[${pos}]`});
+      pos++;
+    }
+    if (bk.length > 0)
+      S.push({a:[...a], dn:new Set(done), c, w,
+        msg:`버킷[${bi}] 완료 (${bk.length}개 원소)`});
+  }
+
+  const allD=new Set(Array.from({length:n},(_,i)=>i));
+  S.push({a:[...a], dn:allD, c, w, msg:`✓ 정렬 완료! — ${bucketCount}개 버킷, O(n+k) 평균`, fin:true});
   return S;
 }
 
@@ -777,6 +920,193 @@ Partition(A, lo, hi):
 📚 Williams "Heapsort" CACM 1964
 📚 Floyd "Treesort 3" CACM 1964</span>`,
     rec:recHeap
+  },
+  counting:{
+    title:'COUNTING SORT',sub:'계수 정렬 · 1954년 · Harold H. Seward · 선형 정렬',
+    tags:['O(n+k)','안정 정렬','비교 불필요','정수 한정'],
+    cx:['O(n+k)','O(n+k)','O(n+k)','O(n+k)','✓ 안정','중'],
+    desc:`계수 정렬은 1954년 Harold H. Seward가 제안한 비교 기반이 아닌 선형 시간 정렬 알고리즘입니다. k는 값의 범위(max-min+1)입니다.
+
+🔑 동작 원리 3단계:
+① Count: 각 값의 등장 횟수를 카운트 배열에 기록 O(n)
+② Prefix Sum: 누적합으로 각 값의 최종 출력 위치 결정 O(k)
+③ Output: 뒤에서 앞으로 순회하여 안정성 보장 O(n)
+
+⚠️ 제약: 정수 또는 유한 범위 값에만 적용 가능. k가 n보다 훨씬 크면 비효율적입니다.`,
+    ai:`• 자연어 처리(NLP)의 토큰 빈도 계산 (Bag of Words)
+• 히스토그램 기반 이미지 처리 — 픽셀 값 분포 정렬
+• Radix Sort의 핵심 서브루틴으로 활용
+• 강화학습 리플레이 버퍼에서 우선순위 인덱싱
+• 범주형 피처(Categorical Feature) 빈도 기반 인코딩`,
+    py:`<span class="cm"># Counting Sort — 안정 정렬 버전</span>
+<span class="kw">def</span> <span class="fn">counting_sort</span>(arr):
+    <span class="kw">if not</span> arr: <span class="kw">return</span> arr
+    min_v, max_v = min(arr), max(arr)
+    k = max_v - min_v + 1
+    count = [0] * k
+
+    <span class="cm"># Phase 1: 카운트</span>
+    <span class="kw">for</span> x <span class="kw">in</span> arr:
+        count[x - min_v] += 1
+
+    <span class="cm"># Phase 2: 누적합 (Prefix Sum)</span>
+    <span class="kw">for</span> i <span class="kw">in</span> range(1, k):
+        count[i] += count[i - 1]
+
+    <span class="cm"># Phase 3: 출력 (뒤→앞: 안정성 보장)</span>
+    out = [0] * len(arr)
+    <span class="kw">for</span> x <span class="kw">in</span> reversed(arr):
+        count[x - min_v] -= 1
+        out[count[x - min_v]] = x
+    <span class="kw">return</span> out
+
+<span class="cm"># 시간: O(n+k), 공간: O(n+k)</span>
+<span class="cm"># k = 값의 범위, n이 크고 k가 작을 때 최적</span>`,
+    ps:`<span style="color:#aaa">CountingSort(A, min, max):
+  k = max - min + 1
+  count[0..k-1] = 0
+
+  // Phase 1: Count
+  FOR x IN A: count[x-min]++
+
+  // Phase 2: Prefix Sum
+  FOR i = 1 TO k-1:
+    count[i] += count[i-1]
+
+  // Phase 3: Output (stable: reverse)
+  FOR x IN reverse(A):
+    count[x-min]--
+    out[count[x-min]] = x
+  RETURN out</span>`,
+    hi:`<span style="color:#ccc;line-height:2.2">📅 <span style="color:var(--yellow)">1954</span>: Harold H. Seward, MIT 기술 보고서 발표
+📅 <span style="color:var(--yellow)">1973</span>: Knuth, TAOCP Vol.3에서 이론 정립
+📌 비교 기반 정렬 하한 Ω(n log n)을 우회하는 최초 실용 알고리즘
+📌 현재: 기수 정렬(Radix Sort)의 핵심 서브루틴
+📚 Seward, H.H. "Information Sorting..." MIT (1954)
+📚 Cormen et al., CLRS Chapter 8.2</span>`,
+    rec:recCounting
+  },
+  radix:{
+    title:'RADIX SORT',sub:'기수 정렬 · 1887년 · Herman Hollerith · 자릿수 정렬',
+    tags:['O(d·n)','안정 정렬','비교 불필요','정수 특화'],
+    cx:['O(d·n)','O(d·n)','O(d·n)','O(n+k)','✓ 안정','중'],
+    desc:`기수 정렬은 1887년 Herman Hollerith가 천공 카드 집계기에서 사용한 아이디어에서 비롯된 알고리즘입니다. d는 최대 자릿수, k는 진법(10진수 기준 k=10)입니다.
+
+🔑 LSD(Least Significant Digit) 방식 동작 원리:
+① 1의 자리부터 가장 높은 자리까지 순서대로 정렬
+② 각 자릿수마다 Counting Sort를 안정 정렬로 수행
+③ d번의 패스 후 완전 정렬 달성
+
+⚠️ MSD(Most Significant Digit) 방식도 존재하며 재귀적 구현이 가능합니다.`,
+    ai:`• 분산 ML 시스템에서 대규모 정수 ID 정렬
+• GPU 병렬 기수 정렬 — CUDA Thrust 라이브러리 핵심
+• 해시 테이블 버킷 정렬과 동일한 패러다임
+• 문자열 데이터의 접미사 배열(Suffix Array) 구축
+• 비트코인 UTXO 트랜잭션 ID 정렬에 활용`,
+    py:`<span class="cm"># Radix Sort — LSD 방식 (Counting Sort 기반)</span>
+<span class="kw">def</span> <span class="fn">counting_sort_by_digit</span>(arr, exp):
+    n = len(arr)
+    out = [0] * n
+    count = [0] * 10
+
+    <span class="kw">for</span> i <span class="kw">in</span> range(n):
+        d = (arr[i] // exp) % 10
+        count[d] += 1
+    <span class="kw">for</span> i <span class="kw">in</span> range(1, 10):
+        count[i] += count[i-1]
+    <span class="kw">for</span> i <span class="kw">in</span> range(n-1, -1, -1):  <span class="cm"># 역순 → 안정</span>
+        d = (arr[i] // exp) % 10
+        count[d] -= 1
+        out[count[d]] = arr[i]
+    <span class="kw">for</span> i <span class="kw">in</span> range(n):
+        arr[i] = out[i]
+
+<span class="kw">def</span> <span class="fn">radix_sort</span>(arr):
+    max_v = max(arr)
+    exp = 1
+    <span class="kw">while</span> max_v // exp > 0:  <span class="cm"># 자릿수마다 반복</span>
+        <span class="fn">counting_sort_by_digit</span>(arr, exp)
+        exp *= 10
+    <span class="kw">return</span> arr`,
+    ps:`<span style="color:#aaa">RadixSort(A):
+  max_val = MAX(A)
+  exp = 1
+  WHILE max_val / exp > 0:
+    CountingSortByDigit(A, exp)
+    exp = exp * 10
+
+CountingSortByDigit(A, exp):
+  digit(x) = (x / exp) % 10
+  // Stable Counting Sort on digit</span>`,
+    hi:`<span style="color:#ccc;line-height:2.2">📅 <span style="color:var(--yellow)">1887</span>: Herman Hollerith, 천공 카드 집계기 발명
+📅 <span style="color:var(--yellow)">1954</span>: Seward의 Counting Sort와 결합 이론화
+📅 <span style="color:var(--yellow)">2007</span>: NVIDIA CUDA Thrust, GPU 기수 정렬 구현
+📌 d=자릿수, k=기수(10진수:10)일 때 O(d·(n+k))
+📚 Cormen et al., CLRS Chapter 8.3
+📚 Knuth, TAOCP Vol.3 §5.2.5</span>`,
+    rec:recRadix
+  },
+  bucket:{
+    title:'BUCKET SORT',sub:'버킷 정렬 · 균등 분포 가정 · 평균 O(n) 선형',
+    tags:['O(n+k) 평균','안정 정렬','분산 처리','실수 특화'],
+    cx:['O(n)','O(n+k)','O(n²)','O(n+k)','✓ 안정','중'],
+    desc:`버킷 정렬은 데이터가 균등 분포를 따른다고 가정할 때 평균 O(n)을 달성하는 분산 정렬 알고리즘입니다.
+
+🔑 동작 원리 3단계:
+① Scatter: 각 원소를 값 범위에 따라 √n개의 버킷에 분산
+② Sort: 각 버킷 내부를 Insertion Sort로 정렬 (버킷이 작으면 O(1))
+③ Gather: 버킷들을 순서대로 합쳐 출력
+
+⚠️ 최악의 경우: 모든 원소가 한 버킷에 집중 → O(n²)이며, 균등 분포일 때만 O(n) 보장.`,
+    ai:`• 실수형 피처 정규화(Normalization) 전처리 단계에 활용
+• 히스토그램 균등화(Histogram Equalization) — 이미지 처리
+• k-means 클러스터링의 초기 중심점 분산 선택
+• 분산 시스템에서 데이터 파티셔닝 — Hadoop Partitioner
+• 연속형 확률 분포 샘플링 최적화`,
+    py:`<span class="cm"># Bucket Sort — 균등 분포 최적화</span>
+<span class="kw">def</span> <span class="fn">bucket_sort</span>(arr):
+    <span class="kw">if not</span> arr: <span class="kw">return</span> arr
+    min_v, max_v = min(arr), max(arr)
+    n = len(arr)
+    k = max(1, int(n ** 0.5))      <span class="cm"># 버킷 수 = √n</span>
+    rng = max_v - min_v + 1
+
+    buckets = [[] <span class="kw">for</span> _ <span class="kw">in</span> range(k)]
+
+    <span class="cm"># Phase 1: Scatter — 버킷에 분산</span>
+    <span class="kw">for</span> x <span class="kw">in</span> arr:
+        bi = min(k-1, int((x - min_v) / rng * k))
+        buckets[bi].append(x)
+
+    <span class="cm"># Phase 2: Sort — 각 버킷 정렬</span>
+    result = []
+    <span class="kw">for</span> bk <span class="kw">in</span> buckets:
+        bk.sort()                  <span class="cm"># 소규모: Insertion Sort</span>
+        result.extend(bk)
+
+    <span class="kw">return</span> result                  <span class="cm"># Phase 3: Gather</span>`,
+    ps:`<span style="color:#aaa">BucketSort(A, k=√n):
+  min_v, max_v = MIN(A), MAX(A)
+  buckets[0..k-1] = empty lists
+
+  // Phase 1: Scatter
+  FOR x IN A:
+    bi = floor((x-min) / range * k)
+    buckets[bi].append(x)
+
+  // Phase 2: Sort each bucket
+  FOR bi = 0 TO k-1:
+    InsertionSort(buckets[bi])
+
+  // Phase 3: Gather
+  RETURN Concatenate(buckets)</span>`,
+    hi:`<span style="color:#ccc;line-height:2.2">📅 <span style="color:var(--yellow)">1956</span>: E.J. Isaac &amp; R.C. Singleton의 분산 정렬 연구
+📅 <span style="color:var(--yellow)">1987</span>: Aho, Hopcroft, Ullman의 교재로 이론 정립
+📌 균등 분포 가정 시 E[시간복잡도] = O(n)
+📌 실수(Float) 정렬에서 Counting Sort 대안
+📚 Cormen et al., CLRS Chapter 8.4
+📚 Knuth, TAOCP Vol.3 §5.2.5</span>`,
+    rec:recBucket
   },
   tim:{
     title:'TIMSORT',sub:'Python/Java 표준 · 2002년 · Tim Peters · 하이브리드',
@@ -1070,6 +1400,7 @@ function resetArr() { stopSort(); genArr(); }
 function shuffleArr() {
   stopSort();
   for (let i=ARR.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ARR[i],ARR[j]]=[ARR[j],ARR[i]];}
+  ORIGIN_ARR = [...ARR];   // 셔플 후 새 원본으로 저장
   STEPS=[]; SIDX=0;
   render(ARR,{}); resetStats(); updDisp();
 }
@@ -1083,6 +1414,7 @@ function onSz() {
 function genArr(n) {
   const sz = n || parseInt(document.getElementById('sz').value);
   ARR = Array.from({length:sz},()=>Math.floor(Math.random()*88)+12);
+  ORIGIN_ARR = [...ARR];   // 원본 스냅샷 저장
   STEPS=[]; SIDX=0;
   render(ARR,{}); resetStats(); updDisp();
 }
@@ -1118,7 +1450,15 @@ function selectAlgo(name, btn) {
   document.getElementById('tab-py').innerHTML = `<pre>${a.py}</pre>`;
   document.getElementById('tab-ps').innerHTML = `<pre>${a.ps}</pre>`;
   document.getElementById('tab-hi').innerHTML = `<pre>${a.hi}</pre>`;
-  genArr();
+
+  // 배열이 이미 존재하면 원본 그대로 복원, 최초 진입이면 새로 생성
+  if (ORIGIN_ARR.length > 0) {
+    ARR = [...ORIGIN_ARR];   // 크기·값 동일하게 복원
+    STEPS=[]; SIDX=0;
+    render(ARR,{}); resetStats(); updDisp();
+  } else {
+    genArr();                // 최초 실행 시만 새 배열 생성
+  }
   swTab('py');
 }
 
